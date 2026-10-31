@@ -1,0 +1,5 @@
+# build products (regenerate with the logue-sdk build)
+build/
+.dep/
+sim/
+*.nts3unit
