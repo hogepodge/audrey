@@ -19,6 +19,7 @@ Lift it and the beast sinks back into the dark.
 
 ## Contents
 
+- [Download](#download)
 - [Building](#building)
 - [Installing on the NTS-3](#installing-on-the-nts-3)
 - [Setting up a program](#setting-up-a-program)
@@ -28,6 +29,13 @@ Lift it and the beast sinks back into the dark.
 - [Trying it in a browser](#trying-it-in-a-browser)
 - [Credits](#credits)
 - [License](#license)
+
+## Download
+
+A ready-to-install `audrey.nts3unit` is attached to each release on the
+[Releases page](https://github.com/hogepodge/audrey/releases). Download it and
+skip ahead to [Installing on the NTS-3](#installing-on-the-nts-3), or build it
+yourself as below.
 
 ## Building
 
