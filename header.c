@@ -71,7 +71,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},     // INPUT
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 725},   // BODY
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},     // DRIVE
-    {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},   // LEVEL, like Korg's DRY/WET at 512
+    {k_genericfx_param_assign_depth, k_genericfx_curve_exp,    k_genericfx_curve_unipolar, 0, 1023, 512},   // LEVEL, like Korg's DRY/WET at 512
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 600},   // REVERB
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 795},   // RELEASE
   }
