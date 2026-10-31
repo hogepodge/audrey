@@ -7,7 +7,7 @@
  *  input --x INPUT--+
  *  noise (-90 dB) --+
  *                   v
- *    +--> KS string -> drive -> LPF -> HPF -> reverb --+--> soft clip -> out
+ *    +--> KS string -> drive -> LPF -> HPF -> reverb --+--> soft clip -> x LEVEL -> out
  *    |                                                 |
  *    +--- body delay <-- x loop gain <-----------------+
  *
@@ -43,7 +43,7 @@ public:
     INPUT,
     BODY,
     DRIVE,
-    LOW_CUT,
+    LEVEL,
     REVERB,
     RELEASE,
     NUM_PARAMS
@@ -57,7 +57,7 @@ public:
     float input;   // 0..1
     float body;    // 0..1
     float drive;   // 0..1, clip shape
-    float low_cut; // 0..1
+    float level;   // 0..1, output amplitude
     float reverb;  // 0..1
     float release; // 0..1
 
@@ -68,7 +68,7 @@ public:
       input = 0.f;
       body = param_10bit_to_f32(725);
       drive = 0.f;
-      low_cut = param_10bit_to_f32(550);
+      level = param_10bit_to_f32(512);
       reverb = param_10bit_to_f32(600);
       release = param_10bit_to_f32(795);
     }
@@ -96,8 +96,8 @@ public:
     case DRIVE:
       params_.drive = param_10bit_to_f32(value);
       break;
-    case LOW_CUT:
-      params_.low_cut = param_10bit_to_f32(value);
+    case LEVEL:
+      params_.level = param_10bit_to_f32(value);
       break;
     case REVERB:
       params_.reverb = param_10bit_to_f32(value);
@@ -143,7 +143,8 @@ public:
     pitch_ = params_.pitch;
     string_delay_ = pitch_to_delay(pitch_);
     lpf_hz_ = hunger_to_lpf_hz(params_.hunger);
-    hpf_hz_ = low_cut_to_hz(params_.low_cut);
+    level_ = params_.level;
+    hpf_.set_highpass(kLowCutHz, kFilterQ, getSampleRate());
     body_pos_ = params_.body;
     hunger_ = params_.hunger;
     reverb_pos_ = params_.reverb;
@@ -180,9 +181,7 @@ public:
     const float hunger_eff = hunger_ * gate_end;
 
     lpf_hz_ += (hunger_to_lpf_hz(hunger_eff) - lpf_hz_) * block_coef(kFilterLag, sr, frames);
-    hpf_hz_ += (low_cut_to_hz(p.low_cut) - hpf_hz_) * block_coef(kFilterLag, sr, frames);
     lpf_.set_lowpass(lpf_hz_, kFilterQ, sr);
-    hpf_.set_highpass(hpf_hz_, kFilterQ, sr);
 
     // REVERB: mix rises linearly, decay on Audrey's anti-exponential curve
     reverb_pos_ += (p.reverb - reverb_pos_) * block_coef(kFilterLag, sr, frames);
@@ -216,6 +215,7 @@ public:
     {
       fb_gain_ += fb_gain_inc;
       input_gain_ += (input_gain_target - input_gain_) * gain_c;
+      level_ += (p.level - level_) * gain_c;
       body_pos_ += (p.body - body_pos_) * body_c;
       string_delay_ += string_delay_inc;
       const float body_delay = body_to_delay(body_pos_, string_delay_);
@@ -243,8 +243,8 @@ public:
       body_[0].write(l * fb_gain_);
       body_[1].write(r * fb_gain_);
 
-      out[0] = soft_clip(l * kOutputGain);
-      out[1] = soft_clip(r * kOutputGain);
+      out[0] = soft_clip(l * kOutputGain) * level_;
+      out[1] = soft_clip(r * kOutputGain) * level_;
     }
 
     string_delay_ = string_delay_target;
@@ -288,8 +288,7 @@ private:
   static constexpr float kAudreyDrive = 0.4f; // fixed daisysp Overdrive amount, as Audrey
   static constexpr float kLpfMinHz = 800.f;
   static constexpr float kLpfMaxHz = 18000.f;
-  static constexpr float kHpfMinHz = 10.f;
-  static constexpr float kHpfMaxHz = 4000.f;
+  static constexpr float kLowCutHz = 250.f; // in-loop HPF, as Audrey's default; use a stock HPF after for more
   static constexpr float kFilterQ = 0.9f;
   static constexpr float kReverbThresholdDb = 6.f; // measured threshold shift at full REVERB
   static constexpr float kReverbFbMin = 0.2f; // Audrey's reverb feedback range
@@ -341,7 +340,6 @@ private:
   }
 
   float hunger_to_lpf_hz(float h) const { return norm_to_exp(h, kLpfMinHz, kLpfMaxHz); }
-  float low_cut_to_hz(float v) const { return norm_to_exp(v, kHpfMinHz, kHpfMaxHz); }
   float release_to_seconds(float v) const { return norm_to_exp(v, kReleaseMinS, kReleaseMaxS); }
 
   // Body delay, a blend of Audrey's absolute 1-100 ms (gritty: the string fights
@@ -384,7 +382,7 @@ private:
   float pitch_ = 40.f;
   float string_delay_ = 1000.f;
   float lpf_hz_ = kLpfMaxHz;
-  float hpf_hz_ = 250.f;
+  float level_ = 0.5f;
   float body_pos_ = 0.5f; // smoothed BODY, 0..1
   float hunger_ = 0.f;
   float reverb_pos_ = 0.f;
