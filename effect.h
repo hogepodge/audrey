@@ -4,12 +4,11 @@
  *  AUDREY: resonating feedback horror synth for NTS-3 kaoss pad kit.
  *  Based on Audrey II by Nick Donaldson / Synthux Academy (MIT).
  *
- *  input --x INPUT--+
- *  noise (-90 dB) --+
- *                   v
- *    +--> KS string -> drive -> LPF -> HPF -> reverb --+--> soft clip -> x LEVEL -> out
- *    |                                                 |
- *    +--- body delay <-- x loop gain <-----------------+
+ *  noise (-90 dB) --+    input --x INPUT (its envelope also ducks the loop gain)
+ *                   v           v
+ *    +--> KS string ------> + --+--> drive -> LPF -> HPF -> reverb --+--> soft clip -> x LEVEL -> out
+ *    |                                                                |
+ *    +--- body delay <-- x loop gain <--------------------------------+
  *
  *  Touching the pad ignites the loop: HUNGER sweeps up from zero in 30 ms, and
  *  when the touch ends it slides back down to zero over RELEASE.
@@ -173,6 +172,18 @@ public:
     hunger_ += (p.hunger - hunger_) * block_coef(kGainLag, sr, frames);
     drive_.set_character(p.drive);
 
+    // Input envelope (block peak, fast attack / slow release). While you play,
+    // the loop ducks and the reverb tail is choked, so your sound is heard
+    // through the beast's throat; when you stop, the loop climbs back over its
+    // threshold and blooms out of what you fed it.
+    float in_peak = 0.f;
+    for (uint32_t i = 0; i < frames * 2; ++i)
+      in_peak = std::max(in_peak, std::fabs(in[i]));
+    const float env_coef = block_coef(in_peak > input_env_ ? kDuckAttack : kDuckRelease, sr, frames);
+    input_env_ += (in_peak - input_env_) * env_coef;
+    // sqrt: half INPUT already ducks most of the way
+    const float duck_amount = std::min(1.f, input_env_ / kDuckRefLevel) * std::sqrt(p.input);
+
     // The gate slides linearly: a quick attack on touch, and on release it drags
     // HUNGER back down to zero over RELEASE, so the loop sinks through its
     // threshold and darkens as it goes, whatever height Y was at.
@@ -186,7 +197,8 @@ public:
     // REVERB: mix rises linearly, decay on Audrey's anti-exponential curve
     reverb_pos_ += (p.reverb - reverb_pos_) * block_coef(kFilterLag, sr, frames);
     const float reverb_mix = reverb_pos_;
-    reverb_.set_feedback(lerpf(kReverbFbMin, kReverbFbMax, ftension(reverb_pos_, -3.f)));
+    const float reverb_fb = lerpf(kReverbFbMin, kReverbFbMax, ftension(reverb_pos_, -3.f));
+    reverb_.set_feedback(lerpf(reverb_fb, kDuckReverbFb, duck_amount));
 
     // string period ramps linearly across the block
     const float string_delay_target = pitch_to_delay(pitch_);
@@ -202,7 +214,7 @@ public:
 
     // loop gain ramps linearly across the block; the last stretch of the gate
     // fades it fully out so an untouched loop is open
-    const float fb_gain_end = hunger_to_loop_gain(hunger_eff) * std::min(1.f, gate_end * kGateFadeOut) * wander_gain;
+    const float fb_gain_end = hunger_to_loop_gain(hunger_eff, duck_amount) * std::min(1.f, gate_end * kGateFadeOut) * wander_gain;
     const float fb_gain_inc = (fb_gain_end - fb_gain_) / frames;
     gate_ = gate_end;
 
@@ -221,12 +233,16 @@ public:
       const float body_delay = body_to_delay(body_pos_, string_delay_);
 
       // ---> Feedback loop: body delay + noise + input into the string
-      const float excite = noise_.process() * kNoiseAmp + (in[0] + in[1]) * 0.5f * input_gain_;
-      float l = body_[0].read_linear(clampf(body_delay * wander_l, 1.f, kBodyLength - 2.f)) + excite;
-      float r = body_[1].read_linear(clampf(body_delay * wander_r - 4.f, 1.f, kBodyLength - 2.f)) + excite;
+      const float noise = noise_.process() * kNoiseAmp;
+      float l = body_[0].read_linear(clampf(body_delay * wander_l, 1.f, kBodyLength - 2.f)) + noise;
+      float r = body_[1].read_linear(clampf(body_delay * wander_r - 4.f, 1.f, kBodyLength - 2.f)) + noise;
 
       l = strings_[0].process(l, string_delay_);
       r = strings_[1].process(r, string_delay_);
+
+      // ---> Input joins after the string (skipping its comb) and feeds the throat
+      l += in[0] * input_gain_;
+      r += in[1] * input_gain_;
 
       l = drive_.process(l);
       r = drive_.process(r);
@@ -240,8 +256,10 @@ public:
       l += (wl - l) * reverb_mix;
       r += (wr - r) * reverb_mix;
 
-      body_[0].write(l * fb_gain_);
-      body_[1].write(r * fb_gain_);
+      // the input also seeds the body directly, bypassing the ducked loop gain,
+      // so the string keeps ringing with it and the loop blooms out of it
+      body_[0].write(l * fb_gain_ + in[0] * input_gain_ * kInputSeed);
+      body_[1].write(r * fb_gain_ + in[1] * input_gain_ * kInputSeed);
 
       out[0] = soft_clip(l * kOutputGain) * level_;
       out[1] = soft_clip(r * kOutputGain) * level_;
@@ -302,7 +320,13 @@ private:
   static constexpr float kBodyMaxRatio = 8.f;
   static constexpr float kReleaseMinS = 0.1f;
   static constexpr float kReleaseMaxS = 20.f;
-  static constexpr float kInputMaxGain = 2.f; // +6 dB
+  static constexpr float kInputMaxGain = 4.f;   // +12 dB into the drive
+  static constexpr float kDuckFloorDb = -30.f;  // loop gain at full duck: far below the ~-9 dB threshold
+  static constexpr float kDuckRefLevel = 0.03f; // input peak (-30 dBFS) that ducks fully
+  static constexpr float kDuckAttack = 0.01f;
+  static constexpr float kDuckRelease = 0.15f;
+  static constexpr float kInputSeed = 0.5f;     // input written straight into the body delay
+  static constexpr float kDuckReverbFb = 0.2f;  // reverb decay while fully ducked (~0.4 s)
   static constexpr float kOutputGain = 0.5f;
   static constexpr float kAttackTime = 0.03f;
   static constexpr float kGateFadeOut = 10.f; // loop gain fades out over the last 10% of the gate
@@ -319,10 +343,11 @@ private:
 
   // Compensates for the drive's small-signal gain and the reverb's phase smearing
   // so the self-oscillation threshold sits at the same HUNGER position
-  // regardless of DRIVE and REVERB
-  float hunger_to_loop_gain(float h) const
+  // regardless of DRIVE and REVERB. `duck` (0..1) pulls the gain toward a floor
+  // well below the threshold, wherever HUNGER is.
+  float hunger_to_loop_gain(float h, float duck) const
   {
-    const float db = hunger_to_db(h) + kReverbThresholdDb * reverb_pos_;
+    const float db = lerpf(hunger_to_db(h), kDuckFloorDb, duck) + kReverbThresholdDb * reverb_pos_;
     return db_to_lin(db) / drive_.small_signal_gain();
   }
 
@@ -388,5 +413,6 @@ private:
   float reverb_pos_ = 0.f;
   float fb_gain_ = 0.f;
   float input_gain_ = 0.f;
+  float input_env_ = 0.f;
   float gate_ = 0.f;
 };
