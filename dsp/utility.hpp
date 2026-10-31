@@ -153,33 +153,38 @@ private:
   uint32_t state = 0x1234567U;
 };
 
-// Smooth random drift in [-1, 1]: every 0.3-2 s picks a new random target and
-// glides toward it. Advanced once per audio block.
+// Smooth random drift in [-1, 1], in time with the music: holds each random
+// target for 1, 2 or 4 beats and glides toward it, so blooms and fades land on
+// the beat grid. Advanced once per audio block by the beats that began in it.
 class Wander
 {
 public:
   void seed(uint32_t s) { rng.seed(s); }
 
-  float process_block(uint32_t frames, float samplerate)
+  // beats: beat boundaries crossed this block; beat_s: current length of a beat
+  float process_block(uint32_t frames, float samplerate, uint32_t beats, float beat_s)
   {
-    countdown -= static_cast<int32_t>(frames);
-    if (countdown <= 0)
+    countdown -= static_cast<int32_t>(beats);
+    if (countdown <= 0 && beats > 0)
     {
       target = rng.process();
-      const float hold_s = lerpf(kMinHoldS, kMaxHoldS, 0.5f * (rng.process() + 1.f));
-      countdown = static_cast<int32_t>(hold_s * samplerate);
-      glide = block_coef(0.5f * hold_s, samplerate, frames);
+      const int choice = std::min(2, static_cast<int>(1.5f * (rng.process() + 1.f)));
+      hold_beats = kHoldBeats[choice];
+      countdown = hold_beats;
     }
-    value += (target - value) * glide;
+    // glide over about half the hold, at the current tempo
+    value += (target - value) * block_coef(0.5f * hold_beats * beat_s, samplerate, frames);
     return value;
   }
 
 private:
-  static constexpr float kMinHoldS = 0.3f;
-  static constexpr float kMaxHoldS = 2.f;
+  static constexpr int kHoldBeats[3] = {1, 2, 4};
   WhiteNoise rng;
   int32_t countdown = 0;
+  int32_t hold_beats = 1;
   float target = 0.f;
   float value = 0.f;
-  float glide = 0.f;
 };
+
+// C++11 needs an out-of-class definition for an odr-used static constexpr array
+constexpr int Wander::kHoldBeats[3];

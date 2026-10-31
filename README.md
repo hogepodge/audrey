@@ -134,6 +134,10 @@ another slot later is fine.
 - **Up to about halfway:** restless. The beast fades out and blooms back on
   its own, even with your finger still. Low notes on the left take their
   time to build.
+
+The drift behind this motion follows the NTS-3's tempo (tap tempo, MIDI clock
+or sync). Its changes land on the beat, every 1, 2 or 4 beats at random, so
+the swells and fades fall in time with the rest of your set.
 - **Top half:** a steady scream that gets brighter and wilder as you climb.
   The timbre still drifts underneath.
 

@@ -137,6 +137,8 @@ public:
       strings_[i].init(getSampleRate());
     drive_.set_drive(kAudreyDrive);
     reverb_.init(getSampleRate());
+    for (int i = 0; i < 3; ++i)
+      wander_[i] = Wander();
     wander_[0].seed(0xA0D3E1U);
     wander_[1].seed(0x5EED2U);
     wander_[2].seed(0xB12EA7U);
@@ -154,6 +156,9 @@ public:
     input_gain_ = 0.f;
     gate_ = 0.f;
     touching_ = false;
+    tick_count_ = 0;
+    tick_phase_ = 0.f;
+    samples_since_ext_tick_ = 0xFFFFFFU;
 
     clear_state();
   }
@@ -212,13 +217,35 @@ public:
     const float string_delay_target = pitch_to_delay(pitch_);
     const float string_delay_inc = (string_delay_target - string_delay_) / frames;
 
-    // body delays drift on their own (independently per side) so resonances
+    // Beat clock: follow the NTS-3's 16th-note tick counter when ticks arrive
+    // (a beat starts every 4th tick), otherwise count 16ths from the tempo
+    const float tick_s = 15.f / tempo_bpm_;
+    const uint32_t ext_ticks = ext_ticks_;
+    const bool ext_ticked = ext_ticks != ext_ticks_seen_;
+    ext_ticks_seen_ = ext_ticks;
+    samples_since_ext_tick_ = ext_ticked ? 0 : std::min<uint32_t>(samples_since_ext_tick_ + frames, 0xFFFFFFU);
+    const uint32_t prev_tick_count = tick_count_;
+    if (ext_ticked)
+    {
+      tick_count_ = ext_tick_counter_;
+      tick_phase_ = 0.f;
+    }
+    else if (samples_since_ext_tick_ > 2.f * tick_s * sr)
+    {
+      tick_phase_ += frames;
+      for (const float tick_samples = tick_s * sr; tick_phase_ >= tick_samples; tick_phase_ -= tick_samples)
+        ++tick_count_;
+    }
+    const uint32_t beats = tick_count_ / 4 - prev_tick_count / 4;
+    const float beat_s = 4.f * tick_s;
+
+    // body delays drift on the beat grid (independently per side) so resonances
     // slide in and out of alignment: the loop swells, sags and comes back
-    const float wander_l = 1.f + kWanderDepth * wander_[0].process_block(frames, sr);
-    const float wander_r = 1.f + kWanderDepth * wander_[1].process_block(frames, sr);
+    const float wander_l = 1.f + kWanderDepth * wander_[0].process_block(frames, sr, beats, beat_s);
+    const float wander_r = 1.f + kWanderDepth * wander_[1].process_block(frames, sr, beats, beat_s);
     // and the loop gain drifts a few dB, dipping the lower half of HUNGER below
     // its threshold now and then so the sound fades out and blooms back
-    const float wander_gain = db_to_lin(kWanderGainDb * wander_[2].process_block(frames, sr));
+    const float wander_gain = db_to_lin(kWanderGainDb * wander_[2].process_block(frames, sr, beats, beat_s));
 
     // loop gain ramps linearly across the block; the last stretch of the gate
     // fades it fully out so an untouched loop is open
@@ -276,6 +303,15 @@ public:
     string_delay_ = string_delay_target;
   }
 
+  void setTempo(float bpm) override final { tempo_bpm_ = clampf(bpm, 10.f, 600.f); }
+
+  // may arrive outside render; only records the counter for process() to read
+  void tempo4ppqnTick(uint32_t counter) override final
+  {
+    ext_tick_counter_ = counter;
+    ext_ticks_ = ext_ticks_ + 1;
+  }
+
   inline void touchEvent(uint8_t id, uint8_t phase, uint32_t x, uint32_t y) override final
   {
     // x/y already reach PITCH/HUNGER through the parameter mappings
@@ -293,6 +329,9 @@ public:
     case k_unit_touch_phase_ended:
     case k_unit_touch_phase_cancelled:
       touching_ = false;
+    tick_count_ = 0;
+    tick_phase_ = 0.f;
+    samples_since_ext_tick_ = 0xFFFFFFU;
       break;
     default:
       break;
@@ -411,6 +450,15 @@ private:
   FdnReverb reverb_;
   Overdrive drive_;
   Wander wander_[3];
+
+  // tempo
+  float tempo_bpm_ = 120.f;
+  volatile uint32_t ext_ticks_ = 0;
+  volatile uint32_t ext_tick_counter_ = 0;
+  uint32_t ext_ticks_seen_ = 0;
+  uint32_t tick_count_ = 0;
+  uint32_t samples_since_ext_tick_ = 0xFFFFFF;
+  float tick_phase_ = 0.f;
   WhiteNoise noise_;
 
   // smoothed state
