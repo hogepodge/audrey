@@ -64,7 +64,7 @@ public:
     {
       pitch = 40.f;
       hunger = 0.f;
-      input = 0.f;
+      input = param_10bit_to_f32(512);
       body = param_10bit_to_f32(725);
       drive = 0.f;
       level = param_10bit_to_f32(512);
@@ -172,17 +172,22 @@ public:
     hunger_ += (p.hunger - hunger_) * block_coef(kGainLag, sr, frames);
     drive_.set_character(p.drive);
 
-    // Input envelope (block peak, fast attack / slow release). While you play,
-    // the loop ducks and the reverb tail is choked, so your sound is heard
-    // through the beast's throat; when you stop, the loop climbs back over its
-    // threshold and blooms out of what you fed it.
+    // The loop ducks (and the reverb tail is choked) when the input *changes*:
+    // a fast envelope jumping above its own slow average marks an attack, a new
+    // note or sound after silence. Your sound is heard through the beast's
+    // throat, then the loop blooms back out of what you fed it. Held notes and
+    // drones catch up with the average and stop ducking, so the beast creeps
+    // back underneath steady input.
     float in_peak = 0.f;
     for (uint32_t i = 0; i < frames * 2; ++i)
       in_peak = std::max(in_peak, std::fabs(in[i]));
     const float env_coef = block_coef(in_peak > input_env_ ? kDuckAttack : kDuckRelease, sr, frames);
     input_env_ += (in_peak - input_env_) * env_coef;
+    input_avg_ += (input_env_ - input_avg_) * block_coef(kDuckAverage, sr, frames);
+    const float rise = input_env_ / (input_avg_ + kDuckFloor); // > 1 while the input grows
+    const float novelty = clampf((rise - 1.f) / (kDuckFullRise - 1.f), 0.f, 1.f);
     // sqrt: half INPUT already ducks most of the way
-    const float duck_amount = std::min(1.f, input_env_ / kDuckRefLevel) * std::sqrt(p.input);
+    const float duck_amount = (input_env_ > kDuckFloor ? novelty : 0.f) * std::sqrt(p.input);
 
     // The gate slides linearly: a quick attack on touch, and on release it drags
     // HUNGER back down to zero over RELEASE, so the loop sinks through its
@@ -322,7 +327,9 @@ private:
   static constexpr float kReleaseMaxS = 20.f;
   static constexpr float kInputMaxGain = 4.f;   // +12 dB into the drive
   static constexpr float kDuckFloorDb = -30.f;  // loop gain at full duck: far below the ~-9 dB threshold
-  static constexpr float kDuckRefLevel = 0.03f; // input peak (-30 dBFS) that ducks fully
+  static constexpr float kDuckFloor = 0.003f;   // input below -50 dBFS never ducks
+  static constexpr float kDuckFullRise = 2.5f;   // an 8 dB jump over the average ducks fully
+  static constexpr float kDuckAverage = 1.5f;    // how long a held sound takes to stop ducking
   static constexpr float kDuckAttack = 0.01f;
   static constexpr float kDuckRelease = 0.15f;
   static constexpr float kInputSeed = 0.5f;     // input written straight into the body delay
@@ -414,5 +421,6 @@ private:
   float fb_gain_ = 0.f;
   float input_gain_ = 0.f;
   float input_env_ = 0.f;
+  float input_avg_ = 0.f;
   float gate_ = 0.f;
 };
