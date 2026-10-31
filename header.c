@@ -34,6 +34,9 @@
  *
  *  NTS-3 kaoss pad kit generic effect unit header definition
  *
+ *  KORG's template (BSD-3-Clause, above), filled in with AUDREY's parameters
+ *  and mappings by Chris Hoge, 2026. See NOTICE.md.
+ *
  */
 
 #include "unit_genericfx.h"   // Note: Include base definitions for genericfx units

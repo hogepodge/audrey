@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Chris Hoge
+// Design after Sean Costello's reverbsc; no reverbsc code. See NOTICE.md.
+
 #pragma once
 
 #include "delayline.hpp"

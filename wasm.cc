@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: BSD-3-Clause
+// From the KORG logue SDK (c) 2018 KORG INC., unmodified. See NOTICE.md.
+
 // reference: https://emscripten.org/docs/api_reference/wasm_audio_worklets.html#wasm-audio-worklets
 // example code: https://github.com/emscripten-core/emscripten/tree/main/test/webaudio
 

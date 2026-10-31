@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Chris Hoge
+// Port of Audrey II's KarplusString (MIT, (c) 2026 Synthux Academy), itself a
+// modified daisysp::KarplusString (MIT, (c) 2020 Electrosmith, Corp). See NOTICE.md.
+
 #pragma once
 
 #include "delayline.hpp"

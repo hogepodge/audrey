@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Chris Hoge
+// Hermite interpolation after daisysp::DelayLine (MIT, (c) 2020 Electrosmith, Corp).
+// See NOTICE.md.
+
 #pragma once
 
 #include <cstddef>

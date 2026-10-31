@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# From the KORG logue SDK (c) 2018 KORG INC. See NOTICE.md.
 ##############################################################################
 # Common project definitions
 #

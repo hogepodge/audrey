@@ -4,6 +4,9 @@
  *  AUDREY: resonating feedback horror synth for NTS-3 kaoss pad kit.
  *  Based on Audrey II by Nick Donaldson / Synthux Academy (MIT).
  *
+ *  SPDX-License-Identifier: MIT
+ *  Copyright (c) 2026 Chris Hoge. See NOTICE.md for third-party credits.
+ *
  *  noise (-90 dB) --+    input --x INPUT (its envelope also ducks the loop gain)
  *                   v           v
  *    +--> KS string ------> + --+--> drive -> LPF -> HPF -> reverb --+--> soft clip -> x LEVEL -> out

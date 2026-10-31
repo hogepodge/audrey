@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: BSD-3-Clause
+# From the KORG logue SDK template (c) 2018 KORG INC.; project values for AUDREY. See NOTICE.md.
 ##############################################################################
 # Configuration for Makefile
 #

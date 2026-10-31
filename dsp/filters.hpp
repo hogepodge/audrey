@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 Chris Hoge
+// Biquad coefficients after Audrey II's BiquadSection (MIT, (c) 2026 Synthux Academy);
+// Tone and DcBlock after DaisySP (MIT, (c) 2020 Electrosmith, Corp). See NOTICE.md.
+
 #pragma once
 
 #include <cmath>

@@ -1,3 +1,10 @@
+// SPDX-License-Identifier: MIT AND BSD-3-Clause
+// Copyright (c) 2026 Chris Hoge
+// The helpers up to fast_tanh come from the KORG logue SDK pluck example
+// (BSD-3-Clause, (c) 2018 KORG INC.). ftension is from Audrey II (MIT,
+// (c) 2026 Synthux Academy); soft_clip and Overdrive follow DaisySP (MIT,
+// (c) 2020 Electrosmith, Corp). See NOTICE.md.
+
 #pragma once
 #include <cmath>
 #include <algorithm>
