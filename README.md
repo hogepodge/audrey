@@ -25,6 +25,7 @@ Lift it and the beast sinks back into the dark.
 - [Installing on the NTS-3](#installing-on-the-nts-3)
 - [Setting up a program](#setting-up-a-program)
 - [Playing](#playing)
+- [Patches](#patches)
 - [Parameters](#parameters)
 - [Troubleshooting](#troubleshooting)
 - [Trying it in a browser](#trying-it-in-a-browser)
@@ -176,6 +177,37 @@ step, from a 16th note (a nervous warble) to 4 bars (glacial tides).
 - Raise **REVERB** to make the restless zone fuller and the release longer.
 - Assign **RATE** to FX DEPTH (Effect Edit) to throw the drift between slow
   tides and a fast warble while you play.
+
+## Patches
+
+Starting points found by playing AUDREY on the NTS-3. Each uses two AUDREY
+modules routed in parallel, each with its own parameters. Three or more
+AUDREYs at once currently overload the NTS-3 and glitch, so stick to two.
+
+### Menacing: two beasts, two echoes
+
+- **Chain:** two AUDREYs in parallel, each followed by its own **Tape Echo**.
+- **Setup:** give the two AUDREYs different parameters, so they grind against
+  each other rather than doubling up.
+- This is Audrey II's full signal flow, tape echo included, times two.
+
+### Mysterious: low and high
+
+- **Chain:** two AUDREYs in parallel, then a **Flanger** and a **Tape Echo**.
+- **Setup:** in Effect Edit, give each AUDREY a different PITCH range on X:
+  one tuned down, one tuned up. Every finger movement then plays a low drone
+  and a high cry together.
+- **Freeze** the flanger and the echo to hold a moment in place while both
+  beasts keep breathing and drifting underneath.
+
+### Ways to vary them
+
+- **Different RATE on each AUDREY** (for example a beat and 2 bars), so
+  their swells drift in and out of phase instead of breathing together.
+- **Different BODY settings,** so each reinforces different overtones.
+- **DRIVE up on one,** for a hard, lopsided voice against a round one.
+- **An interval between the PITCH ranges,** such as a tritone or a minor
+  second, for something nastier.
 
 ## Parameters
 
