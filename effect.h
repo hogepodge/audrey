@@ -7,11 +7,12 @@
  *  SPDX-License-Identifier: MIT
  *  Copyright (c) 2026 Chris Hoge. See NOTICE.md for third-party credits.
  *
- *  noise (-90 dB) --+    input --x INPUT (its envelope also ducks the loop gain)
- *                   v           v
- *    +--> KS string ------> + --+--> drive -> LPF -> HPF -> reverb --+--> soft clip -> x LEVEL -> out
- *    |                                                                |
- *    +--- body delay <-- x loop gain <--------------------------------+
+ *  input --x INPUT, level-capped (and lifts the loop gain while it arrives)
+ *  noise (-90 dB) --+  |
+ *                   v  v
+ *    +------------> + --> KS string -> drive -> LPF -> HPF -> reverb --+--> soft clip -> out
+ *    |                                                                 |
+ *    +--- body delay <-- x loop gain <---------------------------------+
  *
  *  Touching the pad ignites the loop: HUNGER sweeps up from zero in 30 ms, and
  *  when the touch ends it slides back down to zero over RELEASE.
@@ -45,7 +46,7 @@ public:
     INPUT,
     BODY,
     DRIVE,
-    LEVEL,
+    RATE,
     REVERB,
     RELEASE,
     NUM_PARAMS
@@ -59,7 +60,7 @@ public:
     float input;   // 0..1
     float body;    // 0..1
     float drive;   // 0..1, clip shape
-    float level;   // 0..1, output amplitude
+    float rate;    // 0..1, drift tempo division
     float reverb;  // 0..1
     float release; // 0..1
 
@@ -70,7 +71,7 @@ public:
       input = param_10bit_to_f32(512);
       body = param_10bit_to_f32(725);
       drive = 0.f;
-      level = param_10bit_to_f32(512);
+      rate = param_10bit_to_f32(512);
       reverb = param_10bit_to_f32(600);
       release = param_10bit_to_f32(795);
     }
@@ -98,8 +99,8 @@ public:
     case DRIVE:
       params_.drive = param_10bit_to_f32(value);
       break;
-    case LEVEL:
-      params_.level = param_10bit_to_f32(value);
+    case RATE:
+      params_.rate = param_10bit_to_f32(value);
       break;
     case REVERB:
       params_.reverb = param_10bit_to_f32(value);
@@ -147,13 +148,13 @@ public:
     pitch_ = params_.pitch;
     string_delay_ = pitch_to_delay(pitch_);
     lpf_hz_ = hunger_to_lpf_hz(params_.hunger);
-    level_ = params_.level;
     hpf_.set_highpass(kLowCutHz, kFilterQ, getSampleRate());
+    fwd_hpf_.set_highpass(kLowCutHz, kFilterQ, getSampleRate());
     body_pos_ = params_.body;
     hunger_ = params_.hunger;
     reverb_pos_ = params_.reverb;
     fb_gain_ = 0.f;
-    input_gain_ = 0.f;
+    excite_gain_ = 0.f;
     gate_ = 0.f;
     touching_ = false;
     tick_count_ = 0;
@@ -180,22 +181,23 @@ public:
     hunger_ += (p.hunger - hunger_) * block_coef(kGainLag, sr, frames);
     drive_.set_character(p.drive);
 
-    // The loop ducks (and the reverb tail is choked) when the input *changes*:
-    // a fast envelope jumping above its own slow average marks an attack, a new
-    // note or sound after silence. Your sound is heard through the beast's
-    // throat, then the loop blooms back out of what you fed it. Held notes and
-    // drones catch up with the average and stop ducking, so the beast creeps
-    // back underneath steady input.
+    // INPUT feeds the input into the beast's string, as AudreyTouch does, so it
+    // circulates through the string and reverb and comes out as tones. Its
+    // level there is capped: a loud input saturates the shared drive and takes
+    // over. Your dry sound is left to a parallel chain on the NTS-3.
     float in_peak = 0.f;
     for (uint32_t i = 0; i < frames * 2; ++i)
       in_peak = std::max(in_peak, std::fabs(in[i]));
-    const float env_coef = block_coef(in_peak > input_env_ ? kDuckAttack : kDuckRelease, sr, frames);
-    input_env_ += (in_peak - input_env_) * env_coef;
-    input_avg_ += (input_env_ - input_avg_) * block_coef(kDuckAverage, sr, frames);
-    const float rise = input_env_ / (input_avg_ + kDuckFloor); // > 1 while the input grows
-    const float novelty = clampf((rise - 1.f) / (kDuckFullRise - 1.f), 0.f, 1.f);
-    // sqrt: half INPUT already ducks most of the way
-    const float duck_amount = (input_env_ > kDuckFloor ? novelty : 0.f) * std::sqrt(p.input);
+    input_env_ += (in_peak - input_env_) * block_coef(in_peak > input_env_ ? kInputAttack : kInputRelease, sr, frames);
+    // a slow envelope for the cap: it only catches up with sustained input
+    sustain_env_ += (in_peak - sustain_env_) * block_coef(in_peak > sustain_env_ ? kSustainAttack : kSustainRelease, sr, frames);
+    // Feeding the beast makes it hungrier: while input arrives the loop gain is
+    // lifted to just under the threshold, so what you feed in keeps
+    // circulating. It holds for a while after the input stops, then lets go,
+    // whatever the input's level; it is full from halfway up INPUT.
+    feed_age_ = input_env_ > kFeedFull ? 0.f : std::min(feed_age_ + frames / sr, 60.f);
+    const float feed_lift = std::min(1.f, 2.f * p.input) * clampf(1.f - (feed_age_ - kFeedHold) / kFeedRelease, 0.f, 1.f);
+
 
     // The gate slides linearly: a quick attack on touch, and on release it drags
     // HUNGER back down to zero over RELEASE, so the loop sinks through its
@@ -206,12 +208,13 @@ public:
 
     lpf_hz_ += (hunger_to_lpf_hz(hunger_eff) - lpf_hz_) * block_coef(kFilterLag, sr, frames);
     lpf_.set_lowpass(lpf_hz_, kFilterQ, sr);
+    fwd_lpf_.set_lowpass(lpf_hz_, kFilterQ, sr);
 
     // REVERB: mix rises linearly, decay on Audrey's anti-exponential curve
     reverb_pos_ += (p.reverb - reverb_pos_) * block_coef(kFilterLag, sr, frames);
     const float reverb_mix = reverb_pos_;
     const float reverb_fb = lerpf(kReverbFbMin, kReverbFbMax, ftension(reverb_pos_, -3.f));
-    reverb_.set_feedback(lerpf(reverb_fb, kDuckReverbFb, duck_amount));
+    reverb_.set_feedback(reverb_fb);
 
     // string period ramps linearly across the block
     const float string_delay_target = pitch_to_delay(pitch_);
@@ -236,48 +239,64 @@ public:
       for (const float tick_samples = tick_s * sr; tick_phase_ >= tick_samples; tick_phase_ -= tick_samples)
         ++tick_count_;
     }
-    const uint32_t beats = tick_count_ / 4 - prev_tick_count / 4;
-    const float beat_s = 4.f * tick_s;
+    // RATE picks the drift's step on that grid, 1/16 to 4 bars
+    const uint32_t step_ticks = rate_to_ticks(p.rate);
+    const uint32_t steps = tick_count_ / step_ticks - prev_tick_count / step_ticks;
+    const float step_s = step_ticks * tick_s;
 
-    // body delays drift on the beat grid (independently per side) so resonances
+    // body delays drift on the tempo grid (independently per side) so resonances
     // slide in and out of alignment: the loop swells, sags and comes back
-    const float wander_l = 1.f + kWanderDepth * wander_[0].process_block(frames, sr, beats, beat_s);
-    const float wander_r = 1.f + kWanderDepth * wander_[1].process_block(frames, sr, beats, beat_s);
+    const float wander_l = 1.f + kWanderDepth * wander_[0].process_block(frames, sr, steps, step_s);
+    const float wander_r = 1.f + kWanderDepth * wander_[1].process_block(frames, sr, steps, step_s);
     // and the loop gain drifts a few dB, dipping the lower half of HUNGER below
     // its threshold now and then so the sound fades out and blooms back
-    const float wander_gain = db_to_lin(kWanderGainDb * wander_[2].process_block(frames, sr, beats, beat_s));
+    const float wander_db = kWanderGainDb * wander_[2].process_block(frames, sr, steps, step_s);
 
     // loop gain ramps linearly across the block; the last stretch of the gate
     // fades it fully out so an untouched loop is open
-    const float fb_gain_end = hunger_to_loop_gain(hunger_eff, duck_amount) * std::min(1.f, gate_end * kGateFadeOut) * wander_gain;
+    const float fb_gain_end = hunger_to_loop_gain(hunger_eff, wander_db, feed_lift * gate_end) * std::min(1.f, gate_end * kGateFadeOut);
     const float fb_gain_inc = (fb_gain_end - fb_gain_) / frames;
     gate_ = gate_end;
 
     // ---- per-sample smoothing targets ----
-    const float input_gain_target = p.input * kInputMaxGain;
+    // The cap limits the input's sustained level, not its peaks: a steady
+    // input that holds the drive in saturation takes over, but a hit only
+    // saturates it for a moment and the beast recovers before the next one.
+    // So the gain follows a slow envelope (quiet input is boosted up to
+    // kExciteMaxGain), and hits pass up to kTransientHeadroom over the cap
+    // before a soft clip catches them. INPUT's lower half raises the cap to
+    // the most the beast stays on top of; the upper half keeps raising it,
+    // bringing the input forward until it takes over at the top.
+    const float excite_cap = p.input < 0.5f ? kExciteCap * std::max(2.f * p.input, 0.001f)
+                                            : norm_to_exp(2.f * p.input - 1.f, kExciteCap, kExciteCapMax);
+    const float excite_gain_target = std::min(kExciteMaxGain, excite_cap / (sustain_env_ + 1e-6f));
+    const float excite_ceiling = excite_cap * kTransientHeadroom;
+    // Your input is also heard directly, through a copy of the loop's filters,
+    // joining at the output so it never goes around the loop (anything loud in
+    // the loop takes it over). Faint at the bottom of HUNGER, it rises with
+    // HUNGER to sit just above the beast's chaos at the top. INPUT scales it.
+    const float fwd_gain_target = std::min(1.f, 2.f * p.input) * db_to_lin(lerpf(kFwdLowDb, kFwdHighDb, hunger_eff));
     const float gain_c = onepole_coef(kGainLag, sr);
     const float body_c = onepole_coef(kBodyLag, sr);
 
     for (const float *out_end = out + frames * 2; out != out_end; in += 2, out += 2)
     {
       fb_gain_ += fb_gain_inc;
-      input_gain_ += (input_gain_target - input_gain_) * gain_c;
-      level_ += (p.level - level_) * gain_c;
+      excite_gain_ += (excite_gain_target - excite_gain_) * gain_c;
+      fwd_gain_ += (fwd_gain_target - fwd_gain_) * gain_c;
       body_pos_ += (p.body - body_pos_) * body_c;
       string_delay_ += string_delay_inc;
       const float body_delay = body_to_delay(body_pos_, string_delay_);
 
-      // ---> Feedback loop: body delay + noise + input into the string
       const float noise = noise_.process() * kNoiseAmp;
-      float l = body_[0].read_linear(clampf(body_delay * wander_l, 1.f, kBodyLength - 2.f)) + noise;
-      float r = body_[1].read_linear(clampf(body_delay * wander_r - 4.f, 1.f, kBodyLength - 2.f)) + noise;
+      // ---> Feedback loop: body delay + noise + capped input into the string
+      const float el = excite_ceiling * soft_clip(in[0] * excite_gain_ / excite_ceiling);
+      const float er = excite_ceiling * soft_clip(in[1] * excite_gain_ / excite_ceiling);
+      float l = body_[0].read_linear(clampf(body_delay * wander_l, 1.f, kBodyLength - 2.f)) + noise + el;
+      float r = body_[1].read_linear(clampf(body_delay * wander_r - 4.f, 1.f, kBodyLength - 2.f)) + noise + er;
 
       l = strings_[0].process(l, string_delay_);
       r = strings_[1].process(r, string_delay_);
-
-      // ---> Input joins after the string (skipping its comb) and feeds the throat
-      l += in[0] * input_gain_;
-      r += in[1] * input_gain_;
 
       l = drive_.process(l);
       r = drive_.process(r);
@@ -291,13 +310,16 @@ public:
       l += (wl - l) * reverb_mix;
       r += (wr - r) * reverb_mix;
 
-      // the input also seeds the body directly, bypassing the ducked loop gain,
-      // so the string keeps ringing with it and the loop blooms out of it
-      body_[0].write(l * fb_gain_ + in[0] * input_gain_ * kInputSeed);
-      body_[1].write(r * fb_gain_ + in[1] * input_gain_ * kInputSeed);
+      body_[0].write(l * fb_gain_);
+      body_[1].write(r * fb_gain_);
 
-      out[0] = soft_clip(l * kOutputGain) * level_;
-      out[1] = soft_clip(r * kOutputGain) * level_;
+      // ---> Your input, heard directly
+      float fl = in[0] * fwd_gain_, fr = in[1] * fwd_gain_;
+      fwd_lpf_.process(fl, fr);
+      fwd_hpf_.process(fl, fr);
+
+      out[0] = soft_clip((l + fl) * kOutputGain) * kOutputLevel;
+      out[1] = soft_clip((r + fr) * kOutputGain) * kOutputLevel;
     }
 
     string_delay_ = string_delay_target;
@@ -329,9 +351,6 @@ public:
     case k_unit_touch_phase_ended:
     case k_unit_touch_phase_cancelled:
       touching_ = false;
-    tick_count_ = 0;
-    tick_phase_ = 0.f;
-    samples_since_ext_tick_ = 0xFFFFFFU;
       break;
     default:
       break;
@@ -367,16 +386,25 @@ private:
   static constexpr float kBodyMaxRatio = 8.f;
   static constexpr float kReleaseMinS = 0.1f;
   static constexpr float kReleaseMaxS = 20.f;
-  static constexpr float kInputMaxGain = 4.f;   // +12 dB into the drive
-  static constexpr float kDuckFloorDb = -30.f;  // loop gain at full duck: far below the ~-9 dB threshold
-  static constexpr float kDuckFloor = 0.003f;   // input below -50 dBFS never ducks
-  static constexpr float kDuckFullRise = 2.5f;   // an 8 dB jump over the average ducks fully
-  static constexpr float kDuckAverage = 1.5f;    // how long a held sound takes to stop ducking
-  static constexpr float kDuckAttack = 0.01f;
-  static constexpr float kDuckRelease = 0.15f;
-  static constexpr float kInputSeed = 0.5f;     // input written straight into the body delay
-  static constexpr float kDuckReverbFb = 0.2f;  // reverb decay while fully ducked (~0.4 s)
-  static constexpr float kOutputGain = 0.5f;
+  static constexpr float kExciteCap = 0.03f;       // peak input into the string at INPUT 512: the beast stays on top
+  static constexpr float kExciteCapMax = 0.12f;    // ... at full INPUT: the input takes over (the tipping point is ~0.06-0.09)
+  static constexpr float kFeedSustainDb = -10.5f;  // loop gain while fed: just under the ~-9 dB threshold
+  static constexpr float kFeedFull = 0.01f;        // input above -40 dBFS counts as feeding
+  static constexpr float kFeedHold = 2.f;          // the lift holds this long after the input stops,
+  static constexpr float kFeedRelease = 2.f;       // then fades out over this long
+  static constexpr float kExciteMaxGain = 4.f;   // boost for quiet input, +12 dB
+  static constexpr float kInputAttack = 0.01f;  // input envelope, for the cap and the lift
+  static constexpr float kInputRelease = 0.15f;
+  static constexpr float kFwdLowDb = -28.4f;  // direct input at HUNGER 0 (FWD 50 in the tuning build)
+  static constexpr float kFwdHighDb = -6.6f;  // ... at full HUNGER (FWD 175): just above the beast
+  static constexpr float kSustainAttack = 0.3f;  // the cap's envelope: slow enough to let hits through
+  static constexpr float kSustainRelease = 1.f;
+  static constexpr float kTransientHeadroom = 8.f; // hits may peak this far over the cap (+18 dB)
+  // the beast's level is as before (-6 dB, LEVEL's old default), with 6 dB
+  // more headroom before the output soft clip so the input can punch through
+  static constexpr float kOutputGain = 0.25f;
+  static constexpr float kOutputLevel = 1.f;
+  static constexpr float kRateCurve = 1.485f; // 7 * 0.5^1.485 = 2.5: the middle of the beat zone
   static constexpr float kAttackTime = 0.03f;
   static constexpr float kGateFadeOut = 10.f; // loop gain fades out over the last 10% of the gate
   static constexpr float kPitchLag = 0.04f; // short glide; Audrey's 0.2 s felt laggy on the pad
@@ -392,11 +420,13 @@ private:
 
   // Compensates for the drive's small-signal gain and the reverb's phase smearing
   // so the self-oscillation threshold sits at the same HUNGER position
-  // regardless of DRIVE and REVERB. `duck` (0..1) pulls the gain toward a floor
-  // well below the threshold, wherever HUNGER is.
-  float hunger_to_loop_gain(float h, float duck) const
+  // regardless of DRIVE and REVERB. `wander_db` is the gain drift. `lift`
+  // (0..1) raises the gain toward just under the threshold, as a floor the
+  // drift can't pull it below.
+  float hunger_to_loop_gain(float h, float wander_db, float lift) const
   {
-    const float db = lerpf(hunger_to_db(h), kDuckFloorDb, duck) + kReverbThresholdDb * reverb_pos_;
+    const float base = hunger_to_db(h) + wander_db;
+    const float db = lerpf(base, std::max(base, kFeedSustainDb), lift) + kReverbThresholdDb * reverb_pos_;
     return db_to_lin(db) / drive_.small_signal_gain();
   }
 
@@ -415,6 +445,16 @@ private:
 
   float hunger_to_lpf_hz(float h) const { return norm_to_exp(h, kLpfMinHz, kLpfMaxHz); }
   float release_to_seconds(float v) const { return norm_to_exp(v, kReleaseMinS, kReleaseMaxS); }
+
+  // RATE picks the drift step from doubling divisions: 1/16, 1/8, a beat, 1/2,
+  // a bar, 2 bars, 4 bars. A power curve gives the faster divisions more of the
+  // control and centres 512 in the beat zone; the drift holds each target for
+  // 1, 2 or 4 steps, so the slow end holds up to 16 bars.
+  static uint32_t rate_to_ticks(float v)
+  {
+    static constexpr uint32_t kTicks[7] = {1, 2, 4, 8, 16, 32, 64};
+    return kTicks[std::min(6, static_cast<int>(7.f * std::pow(v, kRateCurve)))];
+  }
 
   // Body delay, a blend of Audrey's absolute 1-100 ms (gritty: the string fights
   // the body as pitch moves, but alone it can stick on one tone) and a multiple
@@ -436,6 +476,8 @@ private:
     }
     lpf_.reset();
     hpf_.reset();
+    fwd_lpf_.reset();
+    fwd_hpf_.reset();
     reverb_.reset();
     gate_ = 0.f;
   }
@@ -447,6 +489,7 @@ private:
   DelayLine<kBodyLength> body_[2];
   StereoBiquad lpf_;
   StereoBiquad hpf_;
+  StereoBiquad fwd_lpf_, fwd_hpf_;
   FdnReverb reverb_;
   Overdrive drive_;
   Wander wander_[3];
@@ -465,13 +508,14 @@ private:
   float pitch_ = 40.f;
   float string_delay_ = 1000.f;
   float lpf_hz_ = kLpfMaxHz;
-  float level_ = 0.5f;
   float body_pos_ = 0.5f; // smoothed BODY, 0..1
   float hunger_ = 0.f;
   float reverb_pos_ = 0.f;
   float fb_gain_ = 0.f;
-  float input_gain_ = 0.f;
+  float excite_gain_ = 0.f;
   float input_env_ = 0.f;
-  float input_avg_ = 0.f;
+  float sustain_env_ = 0.f;
+  float fwd_gain_ = 0.f;
+  float feed_age_ = 60.f; // seconds since input was last heard
   float gate_ = 0.f;
 };

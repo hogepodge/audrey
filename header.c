@@ -49,7 +49,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     .api = UNIT_API_VERSION,                                  // API version for which unit was built. See runtime.h
     .dev_id = 0x686F6765U,                                    // Developer ID ('hoge')
     .unit_id = 0x1U,                                          // ID for this unit. Scoped within the context of a given dev_id.
-    .version = 0x00000400U,                                   // This unit's version: major.minor.patch (major<<16 minor<<8 patch).
+    .version = 0x00000500U,                                   // This unit's version: major.minor.patch (major<<16 minor<<8 patch).
     .name = "AUDREY",                                         // Name for this unit, will be displayed on device
     .num_params = 8,                                          // Number of valid parameter descriptors. (max. 8)
 
@@ -59,10 +59,10 @@ const __unit_header genericfx_unit_header_t unit_header = {
 
       {0, 1023, 0, 320, k_unit_param_type_none, 0, 0, 0, {"PITCH"}},   // MIDI note x 8 (192 = C1)
       {0, 1023, 0, 0,   k_unit_param_type_none, 0, 0, 0, {"HUNGER"}},  // loop gain + LPF macro
-      {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"INPUT"}},   // how much the beast yields to the input
+      {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"INPUT"}},   // how much the beast feeds on the input
       {0, 1023, 0, 725, k_unit_param_type_none, 0, 0, 0, {"BODY"}},    // body delay: 1-100 ms blended with 0.5-8 string periods
       {0, 1023, 0, 0,   k_unit_param_type_none, 0, 0, 0, {"DRIVE"}},   // clip shape: round -> lopsided hard
-      {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"LEVEL"}},   // output amplitude (512 = -6 dB)
+      {0, 1023, 0, 512, k_unit_param_type_none, 0, 0, 0, {"RATE"}},    // drift step: 1/16 to 4 bars, beat at 512
       {0, 1023, 0, 600, k_unit_param_type_none, 0, 0, 0, {"REVERB"}},  // in-loop reverb macro
       {0, 1023, 0, 795, k_unit_param_type_none, 0, 0, 0, {"RELEASE"}}, // loop collapse 0.1-20 s
     },
@@ -74,7 +74,7 @@ const __unit_header genericfx_unit_header_t unit_header = {
     {k_genericfx_param_assign_depth, k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},   // INPUT
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 725},   // BODY
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 0},     // DRIVE
-    {k_genericfx_param_assign_none,  k_genericfx_curve_exp,    k_genericfx_curve_unipolar, 0, 1023, 512},   // LEVEL (-6 dB)
+    {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 512},   // RATE (beat)
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 600},   // REVERB
     {k_genericfx_param_assign_none,  k_genericfx_curve_linear, k_genericfx_curve_unipolar, 0, 1023, 795},   // RELEASE
   }

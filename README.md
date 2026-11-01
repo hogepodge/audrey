@@ -10,11 +10,12 @@ loop wakes up and grows. Move your finger and it howls, groans, and drifts.
 Lift it and the beast sinks back into the dark.
 
 ```
- noise --+     your input --x INPUT (also makes the beast yield)
-         v                 v
-   +--> string --------> + --> drive -> filters -> reverb --+--> LEVEL -> out
-   |                                                        |
-   +---- body delay <---- loop gain (HUNGER, touch) <-------+
+      your input (INPUT: level-capped, and makes the beast hungrier)
+ noise --+  |                                 your input, direct (rises with HUNGER)
+         v  v                                         v
+   +---> + --> string --> drive -> filters -> reverb --+--> + --> out
+   |                                                   |
+   +---- body delay <---- loop gain (HUNGER, touch) <--+
 ```
 
 ## Contents
@@ -126,7 +127,7 @@ another slot later is fine.
 | Touch the pad | | Wakes the loop. Lifting lets it sink away over RELEASE. |
 | Pad X | PITCH | The string's pitch, E0 to C5, with a short glide. |
 | Pad Y | HUNGER | How hungry the loop is. See below. |
-| FX DEPTH | INPUT | How much the beast feeds on and yields to your input. |
+| FX DEPTH | INPUT | How much the beast feeds on your input. |
 
 **HUNGER, bottom to top:**
 
@@ -136,20 +137,34 @@ another slot later is fine.
   time to build.
 
 The drift behind this motion follows the NTS-3's tempo (tap tempo, MIDI clock
-or sync). Its changes land on the beat, every 1, 2 or 4 beats at random, so
-the swells and fades fall in time with the rest of your set.
+or sync). Its changes land on the grid, every 1, 2 or 4 steps at random, so
+the swells and fades fall in time with the rest of your set. RATE sets the
+step, from a 16th note (a nervous warble) to 4 bars (glacial tides).
 - **Top half:** a steady scream that gets brighter and wilder as you climb.
   The timbre still drifts underneath.
 
 **INPUT (FX DEPTH):**
 
 - **Bottom of the strip:** the beast alone.
-- **Higher on the strip:** whatever you send into the NTS-3 is fed through
-  the beast's throat (drive, filters, reverb) and seeds the loop.
-- **New notes and attacks:** the beast pulls back so you hear yourself, then
-  grows back out of what you fed it.
-- **Held notes and drones:** the beast creeps back underneath.
-- **If your input keeps drowning the beast,** slide the strip down.
+- **Higher on the strip:** the beast feeds on whatever you send into the
+  NTS-3. Your input goes into its string, as in AudreyTouch, and circulates
+  through the string and reverb, so hits, notes and phrases grow into tones
+  at the pitch under your finger.
+- **Feeding makes it hungrier:** while input arrives, the loop is lifted to
+  just under the point where it sings by itself, so what you feed it keeps
+  circulating. The lift holds for 2 s after the input stops, then lets go
+  over 2 s.
+- **Balance:** your input's level inside the loop is capped, the same however
+  loud you play, so FX DEPTH sets the balance:
+  - **Up to halfway:** the beast stays on top and your input only feeds it.
+  - **Around three quarters:** your input and the beast are about even.
+  - **Top:** your input takes over the loop.
+
+  In the scream zone (top of Y) the beast wins anywhere on the strip.
+- **Your input is also heard directly,** through the beast's filters but
+  outside its loop, so it can't take the beast over. It is faint at the bottom
+  of Y and rises with HUNGER to sit just above the beast's chaos at the top.
+  For your fully dry input, run a parallel chain on the NTS-3.
 
 **Tips:**
 
@@ -159,6 +174,8 @@ the swells and fades fall in time with the rest of your set.
 - Sweep slowly. The loop takes a moment to re-lock after big jumps, and the
   transitions are part of the sound.
 - Raise **REVERB** to make the restless zone fuller and the release longer.
+- Assign **RATE** to FX DEPTH (Effect Edit) to throw the drift between slow
+  tides and a fast warble while you play.
 
 ## Parameters
 
@@ -170,25 +187,23 @@ EDITOR.
 |---|---|---|---|
 | PITCH | 320 | X (128-576) | String pitch. Same scale as the stock OSC effects: value = MIDI note x 8 (192 = C1, 768 = C7). |
 | HUNGER | 0 | Y | Loop gain and brightness. Wake-up point stays put regardless of DRIVE and REVERB. |
-| INPUT | 512 | FX DEPTH | How much of your input feeds the loop, and how strongly the beast yields to it. |
+| INPUT | 512 | FX DEPTH | How much your input feeds the beast's loop, and how forward it sits: beast on top up to 512, even around 830, input on top at 1023. |
 | BODY | 725 | - | Body delay length: which overtones ring and how they clash. |
 | DRIVE | 0 | - | Clip shape, from round and symmetric (Audrey II's sound) to hard and lopsided, with more even harmonics. |
-| LEVEL | 512 | - | Output level. 512 is -6 dB, 1023 is full. |
+| RATE | 512 | - | Drift step: 1/16, 1/8, beat (around 512), 1/2, 1 bar, 2 bars, 4 bars. Each change holds for 1, 2 or 4 steps. The faster divisions get more of the range; the slow ones crowd the top. |
 | REVERB | 600 | - | In-loop reverb, mix and decay together, from a dry string to a cavern. |
 | RELEASE | 795 | - | How long the loop takes to collapse after you lift, 0.1 to 20 s (795 is about 6 s). |
 
 ## Troubleshooting
 
 - **No sound when touching the pad.** Check that you're above the bottom ~10%
-  of Y, that the module is on, and that LEVEL isn't at 0.
+  of Y and that the module is on.
 - **The sound cuts off when I lift my finger.** Raise **rEL tIME** in Module
   Common.
-- **Too loud or too quiet.** Lower or raise LEVEL, or use the module's
-  **Out Gain** (Module Common, -12 to +12 dB).
+- **Too loud or too quiet.** Use the module's **Out Gain** (Module Common,
+  -12 to +12 dB). AUDREY's own output sits at -6 dB.
 - **My input does nothing.** INPUT (FX DEPTH) may be at the bottom, or the
   NTS-3's input gain may be low (Global settings: hold EDIT at power-on).
-- **The beast won't come back while I play.** Slide FX DEPTH down. Constant
-  new attacks keep it yielding.
 
 ## Trying it in a browser
 
@@ -225,6 +240,10 @@ AUDREY stands on the work of others:
   by [Roey Tsemah](https://github.com/roeytsemah). AUDREY is a port of its
   architecture, and its string model, filters, and many default values come
   from it. (MIT)
+- **[AudreyTouch](https://github.com/Synthux-Academy/AudreyTouch)**, Audrey
+  for the Synthux Simple Touch, by Alberto Berera and Rosa Schuurmans, with
+  USB MIDI by Vlad Litvinenko: the idea of feeding the input into the string, and the fast random body modulation that RATE's short
+  steps echo. No AudreyTouch code is used.
 - **[DaisySP](https://github.com/electro-smith/DaisySP)** by Electrosmith:
   the string, tone, DC blocker, overdrive, soft clip, and delay-interpolation
   modules Audrey II uses are reimplemented here. (MIT)

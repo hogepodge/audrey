@@ -50,6 +50,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## AudreyTouch, by Synthux Academy
+
+AudreyTouch is Audrey for the Synthux Simple Touch: ported by
+[Alberto Berera](https://github.com/AlbertoBerera) and
+[Rosa Schuurmans](https://github.com/vitrinekast), with USB MIDI by
+[Vlad Litvinenko](https://github.com/bleeptools), on Nick Donaldson's engine.
+Source: https://github.com/Synthux-Academy/AudreyTouch (MIT, (c) 2022
+Infrasonic Audio, LLC).
+
+Two of AUDREY's behaviours take their ideas from it: INPUT's lower half feeds
+the input into the string, as AudreyTouch does (AUDREY caps its level there and
+lifts the loop gain while it arrives); and RATE's short steps echo its fast random body modulation. No
+AudreyTouch code is used.
+
 ## DaisySP, by Electrosmith
 
 Audrey II is built on DaisySP. AUDREY does not link against DaisySP, but
