@@ -136,13 +136,13 @@ another slot later is fine.
 - **Up to about halfway:** restless. The beast fades out and blooms back on
   its own, even with your finger still. Low notes on the left take their
   time to build.
+- **Top half:** a steady scream that gets brighter and wilder as you climb.
+  The timbre still drifts underneath.
 
 The drift behind this motion follows the NTS-3's tempo (tap tempo, MIDI clock
 or sync). Its changes land on the grid, every 1, 2 or 4 steps at random, so
 the swells and fades fall in time with the rest of your set. RATE sets the
 step, from a 16th note (a nervous warble) to 4 bars (glacial tides).
-- **Top half:** a steady scream that gets brighter and wilder as you climb.
-  The timbre still drifts underneath.
 
 **INPUT (FX DEPTH):**
 
@@ -211,20 +211,198 @@ AUDREYs at once currently overload the NTS-3 and glitch, so stick to two.
 
 ## Parameters
 
-Every parameter can be reassigned to X, Y, or FX DEPTH, with its own range
-and curve, in Effect Edit (hold **EDIT**, tap **FX1**) or in KORG KONTROL
-EDITOR.
+AUDREY has eight parameters. Each runs from 0 to 1023. Any of them can be
+assigned to pad X, pad Y or FX DEPTH, with its own range and curve, in
+Effect Edit (hold **EDIT**, tap **FX1**) or in KORG KONTROL EDITOR.
+Unassigned parameters keep the value set there.
 
-| Parameter | Default | Assigned to | What it does |
+| Parameter | Default | Assigned to | In short |
 |---|---|---|---|
-| PITCH | 320 | X (128-576) | String pitch. Same scale as the stock OSC effects: value = MIDI note x 8 (192 = C1, 768 = C7). |
-| HUNGER | 0 | Y | Loop gain and brightness. Wake-up point stays put regardless of DRIVE and REVERB. |
-| INPUT | 512 | FX DEPTH | How much your input feeds the beast's loop, and how forward it sits: beast on top up to 512, even around 830, input on top at 1023. |
-| BODY | 725 | - | Body delay length: which overtones ring and how they clash. |
-| DRIVE | 0 | - | Clip shape, from round and symmetric (Audrey II's sound) to hard and lopsided, with more even harmonics. |
-| RATE | 512 | - | Drift step: 1/16, 1/8, beat (around 512), 1/2, 1 bar, 2 bars, 4 bars. Each change holds for 1, 2 or 4 steps. The faster divisions get more of the range; the slow ones crowd the top. |
-| REVERB | 600 | - | In-loop reverb, mix and decay together, from a dry string to a cavern. |
-| RELEASE | 795 | - | How long the loop takes to collapse after you lift, 0.1 to 20 s (795 is about 6 s). |
+| [PITCH](#pitch) | 320 (E2) | X, 128-576 | The string's pitch |
+| [HUNGER](#hunger) | 0 | Y, 0-1023 | Loop gain and brightness |
+| [INPUT](#input) | 512 | FX DEPTH, 0-1023 | How much the beast feeds on your input |
+| [BODY](#body) | 725 | - | Body delay length: which overtones ring |
+| [DRIVE](#drive) | 0 | - | Clip shape, round to hard and lopsided |
+| [RATE](#rate) | 512 (a beat) | - | Speed of the drift, locked to tempo |
+| [REVERB](#reverb) | 600 | - | In-loop reverb, mix and decay together |
+| [RELEASE](#release) | 795 (about 6 s) | - | How long the loop takes to collapse after you lift |
+
+### PITCH
+
+The pitch of the Karplus-Strong string at the heart of the loop.
+
+- **Scale:** value = MIDI note x 8, the same as the stock OSC effects. Every
+  8 steps is a semitone.
+
+  | Value | 128 | 192 | 320 | 384 | 480 | 576 |
+  |---|---|---|---|---|---|---|
+  | Note | E0 (21 Hz) | C1 | E2 (82 Hz) | C3 | C4 | C5 (523 Hz) |
+
+- **Default mapping:** X, from 128 (E0) at the left to 576 (C5) at the right.
+  Narrow or shift the range in Effect Edit to play a smaller span, or to
+  tune two AUDREYs apart.
+- **Glide:** pitch changes slide over about 40 ms.
+- The beast doesn't only sing at this pitch. The body delay and the filters
+  pick out overtones and clashing tones around it, so treat PITCH as where
+  the beast lives rather than the note it plays.
+
+### HUNGER
+
+How hungry the loop is: its feedback gain and brightness together.
+
+- **Default mapping:** Y, 0 at the bottom to 1023 at the top.
+- **Gain:** the loop is silent at the bottom and climbs through three zones:
+
+  | Range | Zone | What you hear |
+  |---|---|---|
+  | 0 to about 100 | Asleep | Silent, with an occasional faint stir |
+  | about 100 to 560 | Restless | Fades out and blooms back on its own |
+  | about 560 to 1023 | Scream | A steady, saturated scream, wilder as you climb |
+
+  The point where the beast wakes stays at the same height whatever DRIVE
+  and REVERB are set to: AUDREY compensates the loop gain for both.
+- **Brightness:** a lowpass filter in the loop opens with HUNGER:
+
+  | Value | 0 | 256 | 512 | 768 | 1023 |
+  |---|---|---|---|---|---|
+  | Lowpass | 800 Hz | 1.7 kHz | 3.8 kHz | 8.3 kHz | 18 kHz |
+
+- **Touch:** HUNGER only acts while you touch the pad. A touch brings it up
+  in 30 ms; lifting slides it back to zero over RELEASE, so the beast sinks
+  through its zones and darkens as it goes.
+- The direct path of your input (see [INPUT](#input)) also rises with
+  HUNGER.
+
+### INPUT
+
+How much the beast feeds on the audio you send into the NTS-3.
+
+- **Default mapping:** FX DEPTH, 0 to 1023, default 512.
+- **Into the loop:** your input goes into the beast's string, as in
+  AudreyTouch, and circulates through the string and reverb, so hits, notes
+  and phrases grow into tones at the pitch under your finger.
+- **Level cap:** the input's sustained level in the loop is capped, the same
+  however loud you play, so INPUT sets the balance rather than your input
+  gain. Quiet input is boosted by up to 12 dB; hits may peak well over the
+  cap, so they still get through, while drones and held notes are held
+  under it.
+
+  | Value | Balance (restless zone) |
+  |---|---|
+  | 0 | The beast alone |
+  | up to 512 | The beast stays on top; your input only feeds it |
+  | about 830 | Your input and the beast are about even |
+  | 1023 | Your input takes over the loop |
+
+  In the scream zone (top of Y) the beast wins anywhere on the strip.
+- **Lift:** while input arrives (above about -40 dBFS), the loop gain is
+  held just under the point where the beast sings by itself, so what you
+  feed in keeps circulating. The lift holds for 2 s after the input stops,
+  then fades over 2 s. It is full from 512 up and fades out below.
+- **Direct path:** your input is also heard directly, through copies of the
+  loop's filters but outside the loop, so it can't take the beast over. It
+  rises with HUNGER, from -28 dB at the bottom of Y to -6.6 dB at the top,
+  and is full from 512 up. For your fully dry input, run a parallel chain
+  on the NTS-3.
+
+### BODY
+
+The length of the body delay that carries the loop back to the string. It
+decides which overtones ring and how they clash with the string's pitch.
+
+- **Range:** a blend of 79% absolute time and 21% string periods, so it both
+  fights the string as PITCH moves (grit) and follows it (so it doesn't stick
+  on one tone):
+
+  | Value | 0 | 512 | 725 (default) | 1023 |
+  |---|---|---|---|---|
+  | Absolute part | 1 ms | 10 ms | 26 ms | 100 ms |
+  | String-period part | 0.5 periods | 2 periods | 3.6 periods | 8 periods |
+
+- **Smoothing:** changes glide over about 0.2 s, so sweeping BODY bends the
+  sound rather than clicking.
+- **Drift:** the left and right body delays wander independently by up to
+  12% on the tempo grid (see [RATE](#rate)), and the right side is a few
+  samples shorter, for width.
+
+### DRIVE
+
+The shape of the loop's clipper. The amount of drive is fixed, as in
+Audrey II; this changes its character.
+
+- **0:** round, symmetric soft clipping, Audrey II's sound.
+- **Higher:** blends toward hard clipping with a growing offset, so the
+  clipping becomes lopsided and adds even harmonics: harsher and more
+  buzzing.
+- The point where the beast wakes stays put as DRIVE changes.
+
+### RATE
+
+The speed of the drift that makes the beast breathe: the body delays wander
+by up to 12% and the loop gain by up to 6 dB, which is what makes the
+restless zone fade and bloom.
+
+- **Locked to tempo:** every change lands on the NTS-3's tempo grid (tap
+  tempo, MIDI clock or sync, or the internal tempo). RATE sets the grid step,
+  and each change holds for 1, 2 or 4 steps at random, gliding over half of
+  that.
+
+  | Value | 0-275 | 276-439 | 440-577 | 578-701 | 702-815 | 816-921 | 922-1023 |
+  |---|---|---|---|---|---|---|---|
+  | Step | 1/16 | 1/8 | beat (default) | 1/2 | 1 bar | 2 bars | 4 bars |
+  | Holds at 120 BPM | 0.13-0.5 s | 0.25-1 s | 0.5-2 s | 1-4 s | 2-8 s | 4-16 s | 8-32 s |
+
+- The fast end is a nervous warble; the slow end is glacial tides. At 2 and
+  4 bars, a fade in the restless zone can leave the beast quiet for 10-30 s.
+- Assign RATE to FX DEPTH to throw the drift between speeds while you play.
+
+### REVERB
+
+The reverb inside the loop, mix and decay on one control.
+
+- **0:** a dry string.
+- **Higher:** more of the loop passes through the reverb (the mix rises in
+  step with the value) and its tail grows, from short to about 0.97 feedback
+  at the top: a cavern.
+- **600 (default):** about 60% wet, with a long, haunting tail.
+- Because the reverb is in the loop, it changes the beast itself: it makes
+  the restless zone fuller and the release longer. The point where the beast
+  wakes stays put as REVERB changes.
+
+### RELEASE
+
+How long the loop takes to collapse after you lift your finger.
+
+| Value | 0 | 256 | 512 | 795 (default) | 1023 |
+|---|---|---|---|---|---|
+| Release | 0.1 s | 0.4 s | 1.4 s | about 6 s | 20 s |
+
+- Over this time HUNGER slides linearly from where it was down to zero, so
+  the beast sinks through its zones, darkening as it goes, and the loop
+  opens completely in the last tenth.
+- Set the module's **rEL tIME** (Module Common) high too, or the NTS-3 cuts
+  AUDREY off before the release can play out.
+
+### Fixed settings
+
+These are built in, not adjustable:
+
+| Setting | Value | Notes |
+|---|---|---|
+| Noise into the string | -90 dBFS | Inaudible; what the beast grows from, as in Audrey II |
+| Highpass in the loop | 250 Hz | Audrey II's default; add a stock filter after AUDREY for more |
+| Drive amount | 0.4 | As in Audrey II; DRIVE changes its shape |
+| Output level | -6 dB | With 6 dB of headroom before the output soft clip |
+
+### Module settings that matter
+
+These belong to the NTS-3 module AUDREY runs in (hold **EDIT**, tap
+**FX1** twice):
+
+- **rEL tIME:** set high (1023) so RELEASE can play out.
+- **Release Mode:** THRU brings your dry input back when you lift; SILENT
+  leaves only the beast.
+- **Out Gain:** -12 to +12 dB, to trim AUDREY's level.
 
 ## Troubleshooting
 
